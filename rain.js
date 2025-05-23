@@ -8,7 +8,7 @@ import { $ } from "./jquery/src/jquery.js";
 
 const chance = new Chance();
 const rows = 21;
-const columns = 75;
+const columns = 72;
 const side_margin = 2;
 const bottom_margin = 8;
 
@@ -131,18 +131,18 @@ function block_get(event, row_idx, col_idx, callback) {
 
 function scene_rain(event) {
 	chance.shuffle(range(columns)).forEach((col_idx, idx) => {
-		let delay = chance.integer({ min: 30, max: 50 });
-		let drop_speed = chance.integer({ min: 5, max: 9 });
+		let delay = chance.integer({ min: 20, max: 40 });
+		let drop_speed = chance.integer({ min: 3, max: 6 });
 		let fade_speed = chance.integer({ min: 3, max: 8 });
 
 		if (idx === 0) {
 			delay = 0;
-			drop_speed = 8;
-			fade_speed = 8;
+			drop_speed = 7;
+			fade_speed = 7;
 		} else if (idx < 3) {
-			delay = 15;
+			delay = 13;
 		} else if (idx < 7) {
-			delay = 25;
+			delay = 17;
 		}
 
 		setTimeout(() => {
@@ -178,37 +178,45 @@ function scene_title(event) {
 						return;
 					}
 
-					setTimeout(
-						() =>
-							$(event.target).trigger("scene:block:get", [
-								0,
-								char_idx + 2,
-								(block) => {
-									block.trigger("block:activate:target", [
-										chance.color(),
-										20,
-										40,
-										char,
-										rows - bottom_margin - 2 - row_idx,
-									]);
-								},
-							]),
-						300 * row_idx,
-					);
+					$(event.target).trigger("scene:block:get", [
+						0,
+						char_idx + 2,
+						(block) => {
+							block.trigger("block:activate:target", [
+								chance.color(),
+								20,
+								40,
+								char,
+								rows - bottom_margin - 3 - row_idx,
+							]);
+						},
+					]);
 				}),
-			2 * row_idx,
+			300 * row_idx,
 		),
 	);
 }
 
 function break_title(title) {
-	if (title.length <= columns - 4) {
-		return [title];
+	const max_length = columns - 4;
+	if (title.length <= max_length) {
+		return [title, ""];
 	}
 
-	let lines = [];
+	const lines = [""];
 
-	// FIXME do this later
+	// biome-ignore lint/complexity/noForEach: <explanation>
+	title
+		.split(" ")
+		.forEach((word) => {
+			if (lines[lines.length - 1].length + word.length + 1 <= max_length) {
+				lines[lines.length - 1] = lines[lines.length - 1]
+					.concat(` ${word}`)
+					.trim();
+			} else {
+				lines.push(word);
+			}
+		});
 
 	if (lines.length > 2) {
 		throw new Exception("Too many lines");
@@ -235,14 +243,14 @@ function scene_subtitle(event, title) {
 							block.trigger("block:activate:target", [
 								chance.color(),
 								30,
-								250,
+								50,
 								char,
 								rows - bottom_margin - row_idx,
 							]);
 						},
 					]);
 				}),
-			2 * row_idx,
+			350 * row_idx,
 		),
 	);
 }
@@ -254,13 +262,13 @@ function scene_start(event) {
 
 	setTimeout(() => {
 		elem.trigger("scene:component:subtitle", [
-			"The Unchaining: My Journey Beyond jQuery",
+			"The Unchaining: My Journey Beyond jQuery changes me so much that i feel like a different person",
 		]);
-	}, 7000);
+	}, 5500);
 
 	setTimeout(() => {
 		elem.trigger("scene:component:title");
-	}, 9000);
+	}, 7000);
 }
 
 $(() => {
