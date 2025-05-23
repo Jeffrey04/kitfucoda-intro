@@ -1,61 +1,84 @@
 import Chance from "./chance.js";
 
 import {
-	concat,
 	range,
+	reverse,
 } from "https://cdn.jsdelivr.net/npm/lodash-es@4.17.21/lodash.min.js";
 import { $ } from "./jquery/src/jquery.js";
 
 const chance = new Chance();
-const rows = 17;
-const columns = 57;
+const rows = 21;
+const columns = 75;
+const side_margin = 2;
+const bottom_margin = 8;
 
-function delay(ms) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
+function find_neighbour(elem) {
+	return $(`pre:nth-child(${elem.data("col") + 1})`, elem.parent().next());
 }
 
-function check_is_arrived(destination, block) {
-	return (
-		destination &&
-		destination[0] === $(block).data("row") &&
-		destination[1] === $(block).data("col")
-	);
+function block_activate(elem, char, color, fade_speed) {
+	elem
+		.css({
+			color: "#FFF",
+			opacity: 100,
+		})
+		.text(char);
+
+	if (fade_speed !== false) {
+		setTimeout(() => {
+			elem.css("color", color).animate(
+				{
+					opacity: 0,
+				},
+				fade_speed,
+			);
+		}, 200);
+	}
 }
 
-function block_activate_start(
+function block_activate_rain(event, color, drop_speed, fade_speed) {
+	const elem = $(event.target);
+
+	block_activate(elem, chance.character(), color, fade_speed);
+
+	setTimeout(() => {
+		find_neighbour(elem).trigger("block:activate:rain", [
+			color,
+			drop_speed,
+			fade_speed,
+		]);
+	}, drop_speed);
+}
+
+function block_activate_target(
 	event,
+	color,
 	drop_speed,
 	fade_speed,
-	destination,
 	character,
+	target_row,
 ) {
-	const color = destination ? "#FFFFFF" : "#FFFF00";
-	const to_display = check_is_arrived(destination, event.target)
-		? character
-		: chance.character();
-	const chain = check_is_arrived(destination, event.target)
-		? () => {}
-		: () => {
-				$(event.target).animate({ opacity: 0 }, fade_speed * 100);
+	const elem = $(event.target);
+	const is_arrived = elem.data("row") === target_row;
 
-				setTimeout(() => {
-					$(event.target)
-						.parent()
-						.next()
-						.find(`pre:nth-child(${$(event.target).data("col") + 1})`)
-						.trigger("block:activate:start", [
-							drop_speed,
-							fade_speed,
-							destination,
-							character,
-						]);
-				}, drop_speed * 10);
-			};
+	block_activate(
+		elem,
+		is_arrived ? character : chance.character(),
+		color,
+		is_arrived ? false : fade_speed,
+	);
 
-	$(event.target)
-		.text(to_display)
-		.css("color", color)
-		.animate({ opacity: 100 }, 10, chain);
+	if (!is_arrived) {
+		setTimeout(() => {
+			find_neighbour(elem).trigger("block:activate:target", [
+				color,
+				drop_speed,
+				fade_speed,
+				character,
+				target_row,
+			]);
+		}, drop_speed);
+	}
 }
 
 function block_init(event, row_idx, col_idx) {
@@ -67,7 +90,8 @@ function block_init(event, row_idx, col_idx) {
 		.css("opacity", 0)
 		//.css("color", "#0FF")
 		//.text("%")
-		.on("block:activate:start", block_activate_start);
+		.on("block:activate:rain", block_activate_rain)
+		.on("block:activate:target", block_activate_target);
 
 	//setTimeout(
 	//	() => {
@@ -101,73 +125,142 @@ function block_get(event, row_idx, col_idx, callback) {
 		$(
 			`div:nth-child(${row_idx + 1}) pre:nth-child(${col_idx + 1})`,
 			event.target,
-		).get(0),
+		),
+	);
+}
+
+function scene_rain(event) {
+	chance.shuffle(range(columns)).forEach((col_idx, idx) => {
+		let delay = chance.integer({ min: 30, max: 50 });
+		let drop_speed = chance.integer({ min: 5, max: 9 });
+		let fade_speed = chance.integer({ min: 3, max: 8 });
+
+		if (idx === 0) {
+			delay = 0;
+			drop_speed = 8;
+			fade_speed = 8;
+		} else if (idx < 3) {
+			delay = 15;
+		} else if (idx < 7) {
+			delay = 25;
+		}
+
+		setTimeout(() => {
+			$(event.target).trigger("scene:block:get", [
+				0,
+				col_idx,
+				(block) => {
+					block.trigger("block:activate:rain", [
+						chance.color(),
+						drop_speed * 10,
+						fade_speed * 100,
+					]);
+				},
+			]);
+		}, delay * 100);
+	});
+}
+
+function scene_title(event) {
+	const title = `
+██   ██ ██ ████████ ███████ ██    ██  ██████  ██████  ██████   █████
+██  ██  ██    ██    ██      ██    ██ ██      ██    ██ ██   ██ ██   ██
+█████   ██    ██    █████   ██    ██ ██      ██    ██ ██   ██ ███████
+██  ██  ██    ██    ██      ██    ██ ██      ██    ██ ██   ██ ██   ██
+██   ██ ██    ██    ██       ██████   ██████  ██████  ██████  ██   ██
+`.trim();
+
+	reverse(title.split("\n")).forEach((line, row_idx) =>
+		setTimeout(
+			() =>
+				line.split("").forEach((char, char_idx) => {
+					if (char === " ") {
+						return;
+					}
+
+					setTimeout(
+						() =>
+							$(event.target).trigger("scene:block:get", [
+								0,
+								char_idx + 2,
+								(block) => {
+									block.trigger("block:activate:target", [
+										chance.color(),
+										20,
+										40,
+										char,
+										rows - bottom_margin - 2 - row_idx,
+									]);
+								},
+							]),
+						300 * row_idx,
+					);
+				}),
+			2 * row_idx,
+		),
+	);
+}
+
+function break_title(title) {
+	if (title.length <= columns - 4) {
+		return [title];
+	}
+
+	let lines = [];
+
+	// FIXME do this later
+
+	if (lines.length > 2) {
+		throw new Exception("Too many lines");
+	}
+
+	return lines;
+}
+
+function scene_subtitle(event, title) {
+	const lines = break_title(title);
+
+	// biome-ignore lint/complexity/noForEach: <explanation>
+	reverse(lines).forEach((line, row_idx) =>
+		setTimeout(
+			() =>
+				line.split("").forEach((char, char_idx) => {
+					if (char === " ") {
+						return;
+					}
+					$(event.target).trigger("scene:block:get", [
+						0,
+						char_idx + 2,
+						(block) => {
+							block.trigger("block:activate:target", [
+								chance.color(),
+								30,
+								250,
+								char,
+								rows - bottom_margin - row_idx,
+							]);
+						},
+					]);
+				}),
+			2 * row_idx,
+		),
 	);
 }
 
 function scene_start(event) {
-	const candidates = chance.shuffle(range(columns));
+	const elem = $(event.target);
 
-	concat(
-		candidates,
-		[],
-		//chance.pickset(candidates, Number.parseInt(columns / 3)),
-	).forEach((col_idx, idx) => {
-		let timeout = chance.integer({ min: 40, max: 100 });
+	elem.trigger("scene:component:rain");
 
-		if (idx === 0) {
-			timeout = 0;
-		} else if (idx < 3) {
-			timeout = 10;
-		} else if (idx < 7) {
-			timeout = 20;
-		} else if (idx < 10) {
-			timeout = 35;
-		}
+	setTimeout(() => {
+		elem.trigger("scene:component:subtitle", [
+			"The Unchaining: My Journey Beyond jQuery",
+		]);
+	}, 7000);
 
-		delay(timeout * 100).then(() =>
-			$(event.target).trigger("scene:block:get", [
-				0,
-				col_idx,
-				(block) => {
-					$(block).trigger("block:activate:start", [
-						chance.integer({ min: 5, max: 12 }),
-						chance.integer({ min: 7, max: 13 }),
-					]);
-				},
-			]),
-		);
-	});
-
-	delay(10000).then(() => $(event.target).trigger("scene:title"));
-}
-
-function title_card(event) {
-	const TITLE = "KITFU CODA";
-	const ORDER = chance.shuffle([
-		50, 100, 150, 170, 370, 430, 590, 650, 800, 900,
-	]);
-
-	range(columns - 15, columns - 5).forEach((col_idx, idx) => {
-		if (TITLE[idx] === " ") {
-			return;
-		}
-
-		delay(ORDER[idx]).then(() =>
-			$(event.target).trigger("scene:block:get", [
-				0,
-				col_idx,
-				(block) => {
-					$(block).trigger("block:activate:start", [
-						chance.integer({ min: 8, max: 12 }),
-						chance.integer({ min: 5, max: 10 }),
-						[Number.parseInt(rows / 2), col_idx],
-						TITLE[idx],
-					]);
-				},
-			]),
-		);
-	});
+	setTimeout(() => {
+		elem.trigger("scene:component:title");
+	}, 9000);
 }
 
 $(() => {
@@ -180,10 +273,12 @@ $(() => {
 			),
 		)
 		.on("scene:start", scene_start)
-		.on("scene:title", title_card)
+		.on("scene:component:rain", scene_rain)
+		.on("scene:component:title", scene_title)
+		.on("scene:component:subtitle", scene_subtitle)
 		.on("scene:block:get", block_get);
 
-	setTimeout(() => elem.trigger("scene:start"), 5000);
+	//delay(5000).then(() => elem.trigger("scene:start"));
 
 	$(window).click(() => {
 		elem.trigger("scene:start");
