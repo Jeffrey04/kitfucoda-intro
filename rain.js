@@ -16,17 +16,18 @@ function find_neighbour(elem) {
 	return $(`pre:nth-child(${elem.data("col") + 1})`, elem.parent().next());
 }
 
-function block_activate(elem, char, color, fade_speed) {
+function block_activate(elem, char, color_head, color_tail, fade_speed) {
 	elem
+		.clearQueue()
 		.css({
-			color: "#FFF",
+			color: color_head,
 			opacity: 100,
 		})
 		.text(char);
 
 	if (fade_speed !== false) {
 		setTimeout(() => {
-			elem.css("color", color).animate(
+			elem.css("color", color_tail).animate(
 				{
 					opacity: 0,
 				},
@@ -39,7 +40,7 @@ function block_activate(elem, char, color, fade_speed) {
 function block_activate_rain(event, color, drop_speed, fade_speed) {
 	const elem = $(event.target);
 
-	block_activate(elem, chance.character(), color, fade_speed);
+	block_activate(elem, chance.character(), "#FFF", color, fade_speed);
 
 	setTimeout(() => {
 		find_neighbour(elem).trigger("block:activate:rain", [
@@ -52,7 +53,8 @@ function block_activate_rain(event, color, drop_speed, fade_speed) {
 
 function block_activate_target(
 	event,
-	color,
+	color_head,
+	color_tail,
 	drop_speed,
 	fade_speed,
 	character,
@@ -64,14 +66,16 @@ function block_activate_target(
 	block_activate(
 		elem,
 		is_arrived ? character : chance.character(),
-		color,
+		color_head,
+		color_tail,
 		is_arrived ? false : fade_speed,
 	);
 
 	if (!is_arrived) {
 		setTimeout(() => {
 			find_neighbour(elem).trigger("block:activate:target", [
-				color,
+				color_head,
+				color_tail,
 				drop_speed,
 				fade_speed,
 				character,
@@ -131,18 +135,18 @@ function block_get(event, row_idx, col_idx, callback) {
 
 function scene_rain(event) {
 	chance.shuffle(range(columns)).forEach((col_idx, idx) => {
-		let delay = chance.integer({ min: 20, max: 40 });
-		let drop_speed = chance.integer({ min: 3, max: 6 });
-		let fade_speed = chance.integer({ min: 3, max: 8 });
+		let delay = chance.integer({ min: 15, max: 25 });
+		let drop_speed = chance.integer({ min: 20, max: 40 });
+		let fade_speed = chance.integer({ min: 20, max: 50 });
 
 		if (idx === 0) {
 			delay = 0;
-			drop_speed = 7;
-			fade_speed = 7;
+			drop_speed = 40;
+			fade_speed = 40;
 		} else if (idx < 3) {
-			delay = 13;
+			delay = 7;
 		} else if (idx < 7) {
-			delay = 17;
+			delay = 13;
 		}
 
 		setTimeout(() => {
@@ -152,12 +156,27 @@ function scene_rain(event) {
 				(block) => {
 					block.trigger("block:activate:rain", [
 						chance.color(),
-						drop_speed * 10,
-						fade_speed * 100,
+						drop_speed,
+						fade_speed * 10,
 					]);
 				},
 			]);
 		}, delay * 100);
+	});
+}
+function scene_pour(event) {
+	range(columns).forEach((col_idx, idx) => {
+		$(event.target).trigger("scene:block:get", [
+			0,
+			col_idx,
+			(block) => {
+				block.trigger("block:activate:rain", [
+					chance.color(),
+					chance.integer({ min: 1, max: 3 }) * 10,
+					chance.integer({ min: 3, max: 10 }) * 10,
+				]);
+			},
+		]);
 	});
 }
 
@@ -183,9 +202,10 @@ function scene_title(event) {
 						char_idx + 2,
 						(block) => {
 							block.trigger("block:activate:target", [
+								"#FFBB00",
 								chance.color(),
 								20,
-								40,
+								chance.integer({ min: 1, max: 4 }) * 10,
 								char,
 								rows - bottom_margin - 3 - row_idx,
 							]);
@@ -241,16 +261,17 @@ function scene_subtitle(event, title) {
 						char_idx + 2,
 						(block) => {
 							block.trigger("block:activate:target", [
+								"#EEE",
 								chance.color(),
-								30,
-								50,
+								chance.integer({ min: 10, max: 20 }),
+								chance.integer({ min: 5, max: 10 }),
 								char,
 								rows - bottom_margin - row_idx,
 							]);
 						},
 					]);
 				}),
-			350 * row_idx,
+			300 * row_idx,
 		),
 	);
 }
@@ -262,13 +283,17 @@ function scene_start(event) {
 
 	setTimeout(() => {
 		elem.trigger("scene:component:subtitle", [
-			"The Unchaining: My Journey Beyond jQuery changes me so much that i feel like a different person",
+			"The Unchaining: My Journey Beyond jQuery and the answer to life and everything in the universe",
 		]);
-	}, 5500);
+	}, 3500);
 
 	setTimeout(() => {
 		elem.trigger("scene:component:title");
-	}, 7000);
+	}, 5000);
+
+	setTimeout(() => {
+		elem.trigger("scene:component:pour");
+	}, 8000);
 }
 
 $(() => {
@@ -282,6 +307,7 @@ $(() => {
 		)
 		.on("scene:start", scene_start)
 		.on("scene:component:rain", scene_rain)
+		.on("scene:component:pour", scene_pour)
 		.on("scene:component:title", scene_title)
 		.on("scene:component:subtitle", scene_subtitle)
 		.on("scene:block:get", block_get);
